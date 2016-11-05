@@ -1,0 +1,218 @@
+#!/usr/bin/python3
+#required libraries
+import sys
+import os
+import json
+import ssl
+import subprocess
+import paho.mqtt.client as mqtt
+import time
+import RPi.GPIO as GPIO
+import boto3
+
+#boto3 initialize
+client = boto3.client('lambda',
+   region_name='us-east-1',
+   aws_access_key_id=<>,
+   aws_secret_access_key=<>)
+
+#GPIO
+GPIO.cleanup()
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+RED=26
+GREEN=13
+P0=5
+P1=6
+P2=19
+P3=21
+P4=20
+P5=16
+P6=22
+P7=27
+P8=17
+GPIO.setup(RED, GPIO.OUT) #RED
+GPIO.setup(P2, GPIO.OUT)
+GPIO.setup(GREEN, GPIO.OUT) #GREEN
+GPIO.setup(P1, GPIO.OUT) #p1
+GPIO.setup(P0, GPIO.OUT) #p0
+GPIO.setup(P3, GPIO.OUT)
+GPIO.setup(P4, GPIO.OUT)
+GPIO.setup(P5, GPIO.OUT)
+GPIO.setup(P6, GPIO.OUT)
+GPIO.setup(P7, GPIO.OUT)
+GPIO.setup(P8, GPIO.OUT)
+#initalize GPIO
+GPIO.output(RED, GPIO.LOW)
+GPIO.output(P2, GPIO.LOW)
+GPIO.output(GREEN, GPIO.LOW)
+GPIO.output(P1, GPIO.LOW)
+GPIO.output(P0, GPIO.LOW)
+GPIO.output(P3, GPIO.LOW)
+GPIO.output(P4, GPIO.LOW)
+GPIO.output(P5, GPIO.LOW)
+GPIO.output(P6, GPIO.LOW)
+GPIO.output(P7, GPIO.LOW)
+GPIO.output(P8, GPIO.LOW)
+
+#called while client tries to establish connection with the server
+def on_connect(mqttc, obj, flags, rc):
+   print ('1a')
+   if rc==0:
+       print ("Subscriber Connection status code: "+str(rc)+" | Connection status: successful")
+       mqttc.subscribe([('$aws/things/system-N/shadow/update/accepted',1) , ('$aws/things/system-N/shadow/get/accepted',1)])
+   elif rc==1:
+       print ("Subscriber Connection status code: "+str(rc)+" | Connection status: Connection refused")
+
+#called when a topic is successfully subscribed to
+def on_subscribe(mqttc, obj, mid, granted_qos):
+   print ('1b')
+   print("Subscribed: "+str(mid)+" "+str(granted_qos)+"data"+str(obj))
+   mqttc.publish('$aws/things/system-N/shadow/get', payload='', qos=1, retain=False)
+
+#called when a message is received by a topic
+def on_message(mqttc, obj, msg):
+   print ('1c')
+   payload=json.loads(msg.payload.decode())
+   print(payload)
+   if 'desired' in payload['state']:
+     print('L\n')
+     p0=payload['state']['desired']['p0']
+     p1=payload['state']['desired']['p1']
+     p2=payload['state']['desired']['p2']
+     p3=payload['state']['desired']['p3']
+     p4=payload['state']['desired']['p4']
+     p5=payload['state']['desired']['p5']
+     p6=payload['state']['desired']['p6']
+     p7=payload['state']['desired']['p7']
+     p8=payload['state']['desired']['p8']
+     pAll=payload['state']['desired']['pAll']
+
+     listALL=[p0,p1,p2,p3,p4,p5]
+
+     if p0==0:
+         GPIO.output(P0, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P0, GPIO.HIGH)
+
+     if p1==0:
+         GPIO.output(P1, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P1, GPIO.HIGH)
+
+     if p2==0:
+         GPIO.output(P2, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P2, GPIO.HIGH)
+
+     if p3==0:
+         GPIO.output(P3, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P3, GPIO.HIGH)
+
+     if p4==0:
+         GPIO.output(P4, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P4, GPIO.HIGH)
+
+     if p5==0:
+         GPIO.output(P5, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P5, GPIO.HIGH)
+
+     if p6==0:
+         GPIO.output(P6, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P6, GPIO.HIGH)
+
+     if p7==0:
+         GPIO.output(P7, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P7, GPIO.HIGH)
+
+     if p8==0:
+         GPIO.output(P8, GPIO.LOW)
+         pAll=0
+     else:
+         GPIO.output(P8, GPIO.HIGH)
+
+     if pAll==0:
+         GPIO.output(RED, GPIO.HIGH)
+         GPIO.output(GREEN, GPIO.LOW)
+     if pAll==1:
+         GPIO.output(GREEN, GPIO.HIGH)
+         GPIO.output(RED, GPIO.LOW)
+
+     #Invoking Lambda
+     resp = client.invoke(FunctionName='testProcess',
+       InvocationType='RequestResponse',
+       Payload='{"p0":"'+ str(p0)+'","p1":"'+ str(p1)+'", "pAll":"'+str(pAll)+'" }')
+     print(resp['Payload'].read().decode('ascii'))
+     reported = { "state": { "reported": {"p0": p0,"p1": p1,"p2": p2,"p3": p3,"p4": p4,"p5": p5,"p6": p6,"p7": p7,"p8": p8, "pAll":pAll } } }
+     reportMsg=json.dumps(reported)
+     mqttc.publish('$aws/things/system-N/shadow/update', payload=reportMsg, qos=1, retain=False)
+     time.sleep(0.1)
+
+   else:
+     print('M\n')
+     p0=payload['state']['reported']['p0']
+     p1=payload['state']['reported']['p1']
+     p2=payload['state']['reported']['p2']
+     p3=payload['state']['reported']['p3']
+     p4=payload['state']['reported']['p4']
+     p5=payload['state']['reported']['p5']
+     p6=payload['state']['reported']['p6']
+     p7=payload['state']['reported']['p7']
+     p8=payload['state']['reported']['p8']
+     pAll=payload['state']['reported']['pAll']
+     print("\nreported:"+str(p0) + str(p1)+ str(p2)+str(p3) + str(p4)+ str(p5)+ str(p6) + str(p7)+ str(p8)+ str(pAll))
+
+
+   reported = { "state": { "reported": {"p0": p0,"p1": p1,"p2": p2,"p3": p3,"p4": p4,"p5": p5,"p6": p6,"p7": p7,"p8": p8, "pAll":pAll } } }
+   reportMsg=json.dumps(reported)
+
+   counter=1
+   print("here")
+
+#creating a client with client-id=mqtt-test
+mqttc = mqtt.Client(client_id="clientf")
+print ('1')
+
+mqttc.on_connect = on_connect
+print ('1')
+
+mqttc.on_subscribe = on_subscribe
+print ('1')
+
+mqttc.on_message = on_message
+print ('1')
+
+#Configure network encryption and authentication options. Enables SSL/TLS support.
+#adding client-side certificates and enabling tlsv1.2 support as required by aws-iot service
+mqttc.tls_set("./certs/rootCA.pem",
+
+           certfile="./certs/cert.pem",
+
+           keyfile="./certs/private.pem",
+
+             tls_version=ssl.PROTOCOL_TLSv1_2,
+
+             ciphers=None)
+print ('2')
+
+#connecting to aws-account-specific-iot-endpoint
+mqttc.connect("a7gbl5fecn5od.iot.us-east-1.amazonaws.com", port=8883) #AWS IoT service hostname and portno
+
+print ('3')
+#automatically handles reconnecting
+
+mqttc.loop_forever()
+
